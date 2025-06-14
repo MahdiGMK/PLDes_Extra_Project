@@ -83,14 +83,68 @@ fn eval_expr(expr: &Expr, ctx: &mut Context) -> Result<Value, (EvalError, String
         Expr::NotExpr(expr) => {
             todo!()
         }
-        Expr::SumExpr(lhs, rhs) => {
-            todo!()
+        Expr::SumExpr(lhs_expr, rhs_expr) => {
+            let lhs_val = eval_expr(lhs_expr.as_ref(), ctx)?;
+            let rhs_val = eval_expr(rhs_expr.as_ref(), ctx)?;
+            match lhs_val {
+                Value::IntVal(lhs) => {
+                    if let Value::IntVal(rhs) = rhs_val {
+                        return Ok(Value::IntVal(rhs + lhs));
+                    }
+                }
+                Value::BoolVal(lhs) => {
+                    if let Value::BoolVal(rhs) = rhs_val {
+                        return Ok(Value::BoolVal(lhs | rhs));
+                    }
+                }
+                Value::StrVal(lhs) => {
+                    if let Value::StrVal(rhs) = rhs_val {
+                        return Ok(Value::StrVal(lhs + rhs.as_str()));
+                    }
+                }
+                Value::ListVal(mut lhs) => {
+                    if let Value::ListVal(rhs) = rhs_val {
+                        lhs.extend(rhs);
+                        return Ok(Value::ListVal(lhs));
+                    }
+                }
+                Value::RecVal(mut lhs) => {
+                    if let Value::RecVal(rhs) = rhs_val {
+                        // asume sorted names
+                        todo!();
+                        return Ok(Value::RecVal(lhs));
+                    }
+                }
+            }
+            return Err((
+                EvalError::MismatchedType,
+                format!("Lhs and Rhs type missmatched"),
+            ));
         }
         Expr::VarExpr(varname) => {
             todo!()
         }
         Expr::FieldExpr(expr, fieldname) => {
-            todo!()
+            let expr_val = eval_expr(expr.as_ref(), ctx)?;
+            if let Value::RecVal(val) = expr_val {
+                for (fname, fval) in val {
+                    if fname.eq(fieldname) {
+                        return Ok(fval);
+                    }
+                }
+                Err((
+                    EvalError::MismatchedType,
+                    format!("Expected record type with field {}", fieldname),
+                ))
+            } else {
+                Err((
+                    EvalError::MismatchedType,
+                    format!(
+                        "Expected record type with field {}, found : {:?}",
+                        fieldname, expr_val
+                    ),
+                ))
+            }
         }
         Expr::FuncEvalExpr(funcname, fields) => {
             todo!()
