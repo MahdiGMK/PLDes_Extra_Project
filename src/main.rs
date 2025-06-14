@@ -65,7 +65,11 @@ fn eval_expr(expr: &Expr, ctx: &mut Context) -> Result<Value, (EvalError, String
         Expr::IfElseExpr(cond_expr, true_expr, false_expr) => {
             let cond_expr_val = eval_expr(cond_expr.as_ref(), ctx)?;
             if let Value::BoolVal(cond) = cond_expr_val {
-                eval_expr(true_expr.as_ref(), ctx)
+                if cond {
+                    eval_expr(true_expr.as_ref(), ctx)
+                } else {
+                    eval_expr(false_expr.as_ref(), ctx)
+                }
             } else {
                 Err((
                     EvalError::MismatchedType,
