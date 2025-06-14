@@ -3,6 +3,7 @@ macro_rules! b {
         Box::new($x)
     };
 }
+#[derive(Clone, Debug, PartialEq)]
 enum Value {
     IntVal(i32),
     BoolVal(bool),
@@ -10,6 +11,7 @@ enum Value {
     RecVal(Vec<(String, Value)>),
     ListVal(Vec<Value>),
 }
+#[derive(Clone, Debug, PartialEq)]
 enum Expr {
     VarExpr(String),
     ConstExpr(Value),
@@ -20,18 +22,19 @@ enum Expr {
     FieldExpr(Box<Expr>, String),
     // IndexExpr(Box<Expr>, Box<Expr>),
 }
+#[derive(Clone, Debug, PartialEq)]
 enum STMT {
     VarDef(VarType, String, Box<Expr>),
     FuncDef(Vec<(VarType, String, TypeInfo)>, Box<Expr>),
     RecDef(String, Vec<(String, TypeInfo)>),
     Expr(Box<Expr>),
 }
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum VarType {
     Affine,
     Relevant,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum TypeInfo {
     Int,
     String,
@@ -39,7 +42,10 @@ enum TypeInfo {
     Record(Vec<(String, TypeInfo)>),
     List(Box<TypeInfo>),
 }
+#[derive(Clone, Debug, PartialEq)]
 struct Prog(Vec<STMT>);
+
+use std::collections::HashMap;
 
 use TypeInfo::Boolean as BoolT;
 use TypeInfo::Int as IntT;
@@ -48,17 +54,52 @@ use TypeInfo::Record as RecordT;
 use TypeInfo::String as StrT;
 
 fn main() {}
-
-fn eval_expr(expr: Expr) -> Value {
-    todo!()
+struct Context {
+    // funcs: HashMap<String>,
 }
-enum ProgError {
+impl Context {}
+
+fn eval_expr(expr: &Expr, ctx: Context) -> Result<Value, (EvalError, String)> {
+    match expr {
+        Expr::ConstExpr(val) => Ok(val.clone()),
+        Expr::IfElseExpr(cond_expr, true_expr, false_expr) => {
+            let cond_expr_val = eval_expr(cond_expr.as_ref(), ctx)?;
+            if let Value::BoolVal(cond) = cond_expr_val {
+                eval_expr(true_expr.as_ref(), ctx)
+            } else {
+                Err((
+                    EvalError::MismatchedType,
+                    format!(
+                        "Expected if condition to be bool but was {:?}",
+                        cond_expr_val
+                    ),
+                ))
+            }
+        }
+        Expr::NotExpr(expr) => {
+            todo!()
+        }
+        Expr::SumExpr(lhs, rhs) => {
+            todo!()
+        }
+        Expr::VarExpr(varname) => {
+            todo!()
+        }
+        Expr::FieldExpr(expr, fieldname) => {
+            todo!()
+        }
+        Expr::FuncEvalExpr(funcname, fields) => {
+            todo!()
+        }
+    }
+}
+enum EvalError {
     MismatchedType,
     InvalidField,
     AffineVarMoreThanOnce,
     RelevantVarUnused,
 }
-fn eval_prog(prog: Prog) -> Result<Value, (ProgError, String)> {
+fn eval_prog(prog: Prog) -> Result<Value, (EvalError, String)> {
     todo!()
 }
 
