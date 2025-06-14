@@ -59,7 +59,7 @@ struct Context {
 }
 impl Context {}
 
-fn eval_expr(expr: &Expr, ctx: Context) -> Result<Value, (EvalError, String)> {
+fn eval_expr(expr: &Expr, ctx: &mut Context) -> Result<Value, (EvalError, String)> {
     match expr {
         Expr::ConstExpr(val) => Ok(val.clone()),
         Expr::IfElseExpr(cond_expr, true_expr, false_expr) => {
