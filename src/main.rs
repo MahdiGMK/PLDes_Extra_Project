@@ -18,7 +18,7 @@ enum Expr {
     NotExpr(Box<Expr>),
     IfElseExpr(Box<Expr>, Box<Expr>, Box<Expr>),
     FieldExpr(Box<Expr>, String),
-    IndexExpr(Box<Expr>, Box<Expr>),
+    // IndexExpr(Box<Expr>, Box<Expr>),
 }
 enum STMT {
     VarDef(VarType, String, Box<Expr>),
@@ -48,6 +48,19 @@ use TypeInfo::Record as RecordT;
 use TypeInfo::String as StrT;
 
 fn main() {}
+
+fn eval_expr(expr: Expr) -> Value {
+    todo!()
+}
+enum ProgError {
+    MismatchedType,
+    InvalidField,
+    AffineVarMoreThanOnce,
+    RelevantVarUnused,
+}
+fn eval_prog(prog: Prog) -> Result<Value, (ProgError, String)> {
+    todo!()
+}
 
 #[cfg(test)]
 mod tests {
