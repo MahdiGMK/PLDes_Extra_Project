@@ -160,6 +160,69 @@ enum EvalError {
 fn eval_prog(prog: Prog) -> Result<Value, (EvalError, String)> {
     todo!()
 }
+enum STMTParserState {
+    Idle,
+    Variable(VarType),
+    VariableName(VarType, String),
+    VariableNameEq(VarType, String),
+    Fn,
+    FnName(String),
+    Rec,
+    RecName(String),
+}
+fn capture_next_tok(code: &str) -> (&str, &str) {
+    let mut bg = None;
+    for (i, ch) in code.char_indices() {
+        if ch.is_whitespace() {
+            if let Some(x) = bg {
+                return (code.get(x..i).unwrap(), code.get(i..).unwrap());
+            }
+            continue;
+        }
+        if ch == '{'
+            || ch == '}'
+            || ch == '['
+            || ch == ']'
+            || ch == '('
+            || ch == ')'
+            || ch == ';'
+            || ch == ','
+            || ch == '.'
+            || ch == '+'
+            || ch == '='
+        {
+            return if let Some(x) = bg {
+                (code.get(x..i).unwrap(), code.get(i..).unwrap())
+            } else {
+                (code.get(i..i + 1).unwrap(), code.get(i + 1..).unwrap())
+            };
+        };
+        if bg == None {
+            bg = Some(i);
+        }
+    }
+    return if let Some(x) = bg {
+        (code.get(x..).unwrap(), "")
+    } else {
+        ("", "")
+    };
+}
+fn parse_source_code(mut code: &str) -> Prog {
+    let mut stmts = Vec::<STMT>::new();
+    let mut idx: usize = 0;
+    let mut state = STMTParserState::Idle;
+
+    while !code.is_empty() {
+        let (x, y) = capture_next_tok(code);
+        println!("tok : {x}");
+        code = y;
+    }
+    // while idx < src.len() {
+    //     if src.get(idx)
+    // }
+
+    Prog(stmts)
+}
 
 #[cfg(test)]
 mod tests {
@@ -171,5 +234,26 @@ mod tests {
         let lof_pii = ListT(b!(RecordT(vec![("x".into(), IntT), ("y".into(), IntT),])));
         println!("{:?}", lof_lof_int);
         println!("{:?}", lof_pii);
+    }
+
+    #[test]
+    fn source_code_parsing_test() {
+        println!(
+            "{:?}",
+            parse_source_code(
+                "
+relevant x = 4;
+relevant lst = [1 , 2 , 3];
+affine a = lst + [x];
+fn list_append(relevant list : List(int) , affine item : int) = list + [item];
+affine test_list_append = list_append(a, 5);
+record Pair { x : int, y : int};
+fn get_x(affine pair : Pair) = pair.x;
+fn get_y(affine pair : Pair) = pair.y;
+fn get_sum(relevant pair : Pair) = get_x(pair) + get_y(pair);
+"
+                .into()
+            )
+        );
     }
 }
