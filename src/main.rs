@@ -13,6 +13,7 @@ enum Value {
 }
 #[derive(Clone, Debug, PartialEq)]
 enum Expr {
+    Empty,
     VarExpr(String),
     ConstExpr(Value),
     FuncEvalExpr(String, Vec<Expr>),
@@ -46,6 +47,7 @@ enum TypeInfo {
 struct Program(Vec<STMT>);
 
 use std::collections::HashMap;
+use std::future::Pending;
 
 use TypeInfo::Boolean as BoolT;
 use TypeInfo::Int as IntT;
@@ -61,6 +63,7 @@ impl Context {}
 
 fn eval_expr(expr: &Expr, ctx: &mut Context) -> Result<Value, (EvalError, String)> {
     match expr {
+        Expr::Empty => Err((EvalError::NoneExpr, "Found \"None\" expression!".into())),
         Expr::ConstExpr(val) => Ok(val.clone()),
         Expr::IfElseExpr(cond_expr, true_expr, false_expr) => {
             let cond_expr_val = eval_expr(cond_expr.as_ref(), ctx)?;
@@ -158,6 +161,7 @@ enum EvalError {
     InvalidField,
     AffineVarMoreThanOnce,
     RelevantVarUnused,
+    NoneExpr,
 }
 fn eval_prog(prog: Program) -> Result<Value, (EvalError, String)> {
     todo!()
@@ -182,23 +186,15 @@ fn capture_next_tok(code: &str) -> (&str, &str) {
             }
             continue;
         }
-        if ch == '{'
-            || ch == '}'
-            || ch == '['
-            || ch == ']'
-            || ch == '('
-            || ch == ')'
-            || ch == ';'
-            || ch == ','
-            || ch == '.'
-            || ch == '+'
-            || ch == '='
-        {
-            return if let Some(x) = bg {
-                (code.get(x..i).unwrap(), code.get(i..).unwrap())
-            } else {
-                (code.get(i..i + 1).unwrap(), code.get(i + 1..).unwrap())
-            };
+        match ch {
+            '{' | '}' | '[' | ']' | '(' | ')' | ';' | ',' | '.' | '+' | '=' => {
+                return if let Some(x) = bg {
+                    (code.get(x..i).unwrap(), code.get(i..).unwrap())
+                } else {
+                    (code.get(i..i + 1).unwrap(), code.get(i + 1..).unwrap())
+                };
+            }
+            _ => {}
         };
         if bg == None {
             bg = Some(i);
@@ -248,8 +244,39 @@ fn capture_type(mut code: &str) -> Result<(TypeName, &str), (SyntaxError, String
         _ => Ok((TypeName::Record(tname.into()), cc)),
     }
 }
-fn capture_expr(mut code: &str) -> Result<(Expr, &str), (SyntaxError, String)> {
-    todo!()
+fn capture_strval(mut code: &str) -> Result<String, (SyntaxError, String)> {}
+fn capture_expr<'a>(
+    mut code: &'a str,
+    ending_tok: &str,
+) -> Result<(Expr, &'a str), (SyntaxError, String)> {
+    let (tname, mut cc) = capture_next_tok(code);
+    // let mut current_captured = Expr::Empty;
+    if let Ok(intval) = tname.parse::<i32>() {
+        let intexp = Expr::ConstExpr(Value::IntVal(intval));
+
+        let (tname, mut cc) = capture_next_tok(cc);
+        match tname {
+            "+" => {
+                let (following_expr, cc) = capture_expr(cc, ending_tok)?;
+                return Ok((Expr::SumExpr(b!(intexp), b!(following_expr)), cc));
+            }
+            ending_tok => return Ok((intexp, cc)),
+        }
+    }
+    match tname {
+        "!" => {}
+        "(" => {}
+        "\"" => {}
+        "[" => {}
+        "true" => {}
+        "false" => {}
+        "if" => {}
+        // final_tok => return;
+        _ => {}
+    }
+
+    println!("first nxt tok : {tname} -- \n***\n{cc}\n***\n");
+    return Err((SyntaxError::UnexpectedToken, "random error".into()));
 }
 fn parse_source_code(mut code: &str) -> Result<Program, (SyntaxError, String)> {
     let mut stmts = Vec::<STMT>::new();
@@ -293,7 +320,7 @@ fn parse_source_code(mut code: &str) -> Result<Program, (SyntaxError, String)> {
 
                 cc = expect_token(code, "=")?;
 
-                let (expr, mut cc) = capture_expr(cc)?;
+                let (expr, mut cc) = capture_expr(cc, ";")?;
 
                 todo!("combine fnname, args and expr into STMT::function");
             }
@@ -319,13 +346,13 @@ fn parse_source_code(mut code: &str) -> Result<Program, (SyntaxError, String)> {
             "relevant" => {
                 let (varname, mut cc) = capture_next_tok(code);
                 cc = expect_token(cc, "=")?;
-                let (expr, mut cc) = capture_expr(cc)?;
+                let (expr, mut cc) = capture_expr(cc, ";")?;
                 todo!("combine vartype, varname and expr into STMT::var");
             }
             "affine" => {
                 let (varname, mut cc) = capture_next_tok(code);
                 cc = expect_token(cc, "=")?;
-                let (expr, mut cc) = capture_expr(cc)?;
+                let (expr, mut cc) = capture_expr(cc, ";")?;
                 todo!("combine vartype, varname and expr into STMT::var");
             }
             _ => {
@@ -354,22 +381,17 @@ mod tests {
 
     #[test]
     fn source_code_parsing_test() {
-        println!(
-            "{:?}",
-            parse_source_code(
-                "
-relevant x = 4;
-relevant lst = [1 , 2 , 3];
-affine a = lst + [x];
-fn list_append(relevant list : List(int) , affine item : int) = list + [item];
-affine test_list_append = list_append(a, 5);
-record Pair { x : int, y : int};
-fn get_x(affine pair : Pair) = pair.x;
-fn get_y(affine pair : Pair) = pair.y;
-fn get_sum(relevant pair : Pair) = get_x(pair) + get_y(pair);
-"
-                .into()
-            )
-        );
+        println!("test1 : ");
+        println!("{:?}", parse_source_code("relevant x = 4;".into()));
+        println!("--- --- --- --- --- --- --- --- --- --- --- --- --- --- ---");
+        println!("test2 : ");
+        println!("{:?}", parse_source_code("relevant x = 4;".into()));
+        println!("--- --- --- --- --- --- --- --- --- --- --- --- --- --- ---");
+        println!("test3 : ");
+        println!("{:?}", parse_source_code("affine x = [1, 2, 3];".into()));
+        // println!(
+        //     "{:?}",
+        //     parse_source_code(include_str!("testing/sample1.proc").into())
+        // );
     }
 }

@@ -1,0 +1,12 @@
+relevant x = 4;
+relevant lst = [1 , 2 , 3];
+relevant begin = "salam be \"";
+relevant end = "\" aziz del";
+affine a = lst + [x];
+affine s = begin + "to" + end;
+fn list_append(relevant list : List(int) , affine item : int) = list + [item];
+affine test_list_append = list_append(a, 5);
+record Pair { x : int, y : int};
+fn get_x(affine pair : Pair) = pair.x;
+fn get_y(affine pair : Pair) = pair.y;
+fn get_sum(relevant pair : Pair) = get_x(pair) + get_y(pair);
