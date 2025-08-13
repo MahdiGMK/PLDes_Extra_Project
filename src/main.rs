@@ -25,7 +25,7 @@ enum Expr {
 #[derive(Clone, Debug, PartialEq)]
 enum STMT {
     VarDef(VarType, String, Box<Expr>),
-    FuncDef(Vec<(VarType, String, TypeInfo)>, Box<Expr>),
+    FuncDef(String, Vec<(VarType, String, TypeInfo)>, Box<Expr>),
     RecDef(String, Vec<(String, TypeInfo)>),
     Expr(Box<Expr>),
 }
@@ -43,7 +43,7 @@ enum TypeInfo {
     List(Box<TypeInfo>),
 }
 #[derive(Clone, Debug, PartialEq)]
-struct Prog(Vec<STMT>);
+struct Program(Vec<STMT>);
 
 use std::collections::HashMap;
 
@@ -151,15 +151,18 @@ fn eval_expr(expr: &Expr, ctx: &mut Context) -> Result<Value, (EvalError, String
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
 enum EvalError {
     MismatchedType,
     InvalidField,
     AffineVarMoreThanOnce,
     RelevantVarUnused,
 }
-fn eval_prog(prog: Prog) -> Result<Value, (EvalError, String)> {
+fn eval_prog(prog: Program) -> Result<Value, (EvalError, String)> {
     todo!()
 }
+#[derive(Clone, Debug, PartialEq)]
 enum STMTParserState {
     Idle,
     Variable(VarType),
@@ -207,21 +210,134 @@ fn capture_next_tok(code: &str) -> (&str, &str) {
         ("", "")
     };
 }
-fn parse_source_code(mut code: &str) -> Prog {
+
+#[derive(Clone, Debug, PartialEq)]
+enum SyntaxError {
+    UnexpectedToken,
+}
+fn expect_token<'a>(code: &'a str, tok: &str) -> Result<&'a str, (SyntaxError, String)> {
+    let (tk, cc) = capture_next_tok(code);
+    if tk.eq(tok) {
+        Ok(cc)
+    } else {
+        Err((
+            SyntaxError::UnexpectedToken,
+            format!("expected {tok}, found {tk}"),
+        ))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum TypeName {
+    Int,
+    Bool,
+    List(Box<TypeName>),
+    Record(String),
+}
+fn capture_type(mut code: &str) -> Result<(TypeName, &str), (SyntaxError, String)> {
+    let (tname, mut cc) = capture_next_tok(code);
+    match tname {
+        "int" => Ok((TypeName::Int, cc)),
+        "bool" => Ok((TypeName::Bool, cc)),
+        "List" => {
+            cc = expect_token(cc, "(")?;
+            let (subt, mut cc) = capture_type(cc)?;
+            cc = expect_token(cc, ")")?;
+            Ok((TypeName::List(b!(subt)), cc))
+        }
+        _ => Ok((TypeName::Record(tname.into()), cc)),
+    }
+}
+fn capture_expr(mut code: &str) -> Result<(Expr, &str), (SyntaxError, String)> {
+    todo!()
+}
+fn parse_source_code(mut code: &str) -> Result<Program, (SyntaxError, String)> {
     let mut stmts = Vec::<STMT>::new();
     let mut idx: usize = 0;
     let mut state = STMTParserState::Idle;
 
     while !code.is_empty() {
-        let (x, y) = capture_next_tok(code);
-        println!("tok : {x}");
-        code = y;
+        let (tok, cc) = capture_next_tok(code);
+        code = cc;
+        match tok {
+            "fn" => {
+                let (fnname, mut cc) = capture_next_tok(code);
+                cc = expect_token(cc, "(")?;
+
+                let mut args = Vec::<(VarType, String, TypeName)>::new();
+
+                loop {
+                    let (mut vart_or_end, mut cc) = capture_next_tok(cc);
+                    let vart = match vart_or_end {
+                        ")" => break,
+                        "," => continue,
+                        "affine" => VarType::Affine,
+                        "relative" => VarType::Relevant,
+                        _ => {
+                            return Err((
+                                SyntaxError::UnexpectedToken,
+                                format!(
+                                    "unexpected token {vart_or_end}, should have been one of : \"affine\"/\"relative\"/\")\""
+                                ),
+                            ));
+                        }
+                    };
+
+                    let (mut varname, mut cc) = capture_next_tok(cc);
+                    cc = expect_token(cc, ":")?;
+                    let (vartype, cc) = capture_type(cc)?;
+
+                    args.push((vart, varname.into(), vartype));
+                    code = cc;
+                }
+
+                cc = expect_token(code, "=")?;
+
+                let (expr, mut cc) = capture_expr(cc)?;
+
+                todo!("combine fnname, args and expr into STMT::function");
+            }
+            "record" => {
+                let (recname, mut cc) = capture_next_tok(code);
+                let mut args = Vec::<(String, TypeName)>::new();
+
+                cc = expect_token(cc, "{")?;
+                loop {
+                    let (mut varname_or_end, mut cc) = capture_next_tok(cc);
+                    let vart = match varname_or_end {
+                        "}" => break,
+                        "," => continue,
+                        _ => {
+                            cc = expect_token(cc, ":")?;
+                            let (vartype, cc) = capture_type(cc)?;
+                            args.push((varname_or_end.into(), vartype));
+                        }
+                    };
+                }
+                todo!("combine recname and args into STMT::record");
+            }
+            "relevant" => {
+                let (varname, mut cc) = capture_next_tok(code);
+                cc = expect_token(cc, "=")?;
+                let (expr, mut cc) = capture_expr(cc)?;
+                todo!("combine vartype, varname and expr into STMT::var");
+            }
+            "affine" => {
+                let (varname, mut cc) = capture_next_tok(code);
+                cc = expect_token(cc, "=")?;
+                let (expr, mut cc) = capture_expr(cc)?;
+                todo!("combine vartype, varname and expr into STMT::var");
+            }
+            _ => {
+                println!("ERR!");
+            }
+        }
     }
     // while idx < src.len() {
     //     if src.get(idx)
     // }
 
-    Prog(stmts)
+    Ok(Program(stmts))
 }
 
 #[cfg(test)]
