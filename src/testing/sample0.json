@@ -1,8 +1,8 @@
 [
-  { "VarDef": ["Relevant", "x", { "ConstExpr": { "IntVal": 0 } }] },
+  { "VarDef": ["Affine", "x", { "ConstExpr": { "IntVal": 0 } }] },
   {
     "VarDef": [
-      "Relevant",
+      "Affine",
       "lst",
       {
         "ConstExpr": {

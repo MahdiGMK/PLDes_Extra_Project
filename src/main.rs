@@ -116,6 +116,7 @@ impl TypeContext {
     }
 
     fn resolve_var(&mut self, varname: &str) -> Result<TypeInfo, (EvalError, String)> {
+        println!("[LOG] resolve var : {varname}");
         let vars = if self.infunction {
             &self.local_vars
         } else {
@@ -202,8 +203,8 @@ impl TypeContext {
                         return Err((
                             EvalError::AffineVarMoreThanOnce,
                             format!(
-                                "Affine variable \"{varname}\" may be used {}>1 times",
-                                varvisits.1
+                                "Affine variable \"{varname}\" may be used {}>1 times || {}<=usage<={}",
+                                varvisits.1, varvisits.0, varvisits.1
                             ),
                         ));
                     } else if varvisits.0 != varvisits.1 {
@@ -379,7 +380,7 @@ fn eval_value_type(value: &Value, ctx: &mut TypeContext) -> Result<TypeInfo, (Ev
         Value::ListVal(x) => {
             if let Some(v0) = x.first() {
                 let T0 = eval_value_type(v0, ctx)?;
-                for vi in x {
+                for vi in x.iter().skip(1) {
                     let Ti = eval_value_type(vi, ctx)?;
                     if T0 != Ti {
                         return Err((
@@ -517,7 +518,7 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
         Expr::ListExpr(exprs) => {
             if let Some(e0) = exprs.first() {
                 let T0 = eval_expr_type(e0, ctx)?;
-                for ei in exprs {
+                for ei in exprs.iter().skip(1) {
                     let Ti = eval_expr_type(ei, ctx)?;
                     if Ti != T0 {
                         return Err((
@@ -547,6 +548,7 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
 fn eval_prog_type(prog: &Program) -> Result<TypeInfo, (EvalError, String)> {
     let mut ctx = TypeContext::new();
     let mut optRes = Option::<TypeInfo>::None;
+    let mut vars = vec![];
     for stmt in &prog.0 {
         match stmt {
             STMT::Expr(expr) => {
@@ -560,6 +562,7 @@ fn eval_prog_type(prog: &Program) -> Result<TypeInfo, (EvalError, String)> {
             }
             STMT::VarDef(var_type, name, expr) => {
                 let T = eval_expr_type(expr.as_ref(), &mut ctx)?;
+                vars.push((var_type.clone(), name.clone(), T.clone()));
                 ctx.define_var(var_type.clone(), name.clone(), T)?;
             }
             STMT::FuncDef(name, params, expr) => {
@@ -570,6 +573,8 @@ fn eval_prog_type(prog: &Program) -> Result<TypeInfo, (EvalError, String)> {
             }
         }
     }
+    let visits = ctx.var_visit.pop().unwrap();
+    ctx.check_affine_relative(&vars, &visits)?;
 
     optRes.ok_or((
         EvalError::NoEntryPoint,
