@@ -105,12 +105,12 @@ impl TypeContext {
         for (vname, _) in vars {
             let elsecnt = else_visits.get(vname).unwrap_or(&(0, 0));
             let thencnt = then_visits.get(vname).unwrap_or(&(0, 0));
+            let mergecnt = (min(elsecnt.0, thencnt.0), max(elsecnt.1, thencnt.1));
             if let Some((min, max)) = par_visits.get_mut(vname) {
+                *min += mergecnt.0;
+                *max += mergecnt.1;
             } else {
-                par_visits.insert(
-                    vname.clone(),
-                    (min(elsecnt.0, thencnt.0), max(elsecnt.1, thencnt.1)),
-                );
+                par_visits.insert(vname.clone(), mergecnt);
             }
         }
     }
@@ -123,12 +123,19 @@ impl TypeContext {
         };
         let current_level_visits = self.var_visit.last_mut().unwrap();
         if let Some((min, max)) = current_level_visits.get_mut(varname) {
-            *min = *min + 1u32;
-            *max = *max + 1u32;
+            *min += 1;
+            *max += 1;
         } else {
             current_level_visits.insert(varname.into(), (1, 1));
         }
-        Ok(IntT)
+        Ok(vars
+            .get(varname)
+            .ok_or((
+                EvalError::InvalidField,
+                format!("Variable \"{varname}\" isnt defined"),
+            ))?
+            .1
+            .clone())
     }
 
     fn resolve_typename(&self, typename: &str) -> Result<TypeInfo, (EvalError, String)> {
@@ -137,7 +144,7 @@ impl TypeContext {
                 .get(typename)
                 .ok_or((
                     EvalError::InvalidFuncEval,
-                    format!("There is no record called {typename}"),
+                    format!("There is no record called \"{typename}\""),
                 ))
                 .cloned()?,
         ))
@@ -151,7 +158,7 @@ impl TypeContext {
             .get(funcname)
             .ok_or((
                 EvalError::InvalidFuncEval,
-                format!("There is no function called {funcname}"),
+                format!("There is no function called \"{funcname}\""),
             ))
             .cloned()
     }
@@ -176,13 +183,48 @@ impl TypeContext {
         if self.vars.contains_key(&name) {
             return Err((
                 EvalError::NameDuplication,
-                format!("variable with name {name} already exists"),
+                format!("variable with name \"{name}\" already exists"),
             ));
         }
         self.vars.insert(name, (var_type, Tinfo));
         Ok(())
     }
-
+    fn check_affine_relative(
+        &self,
+        vars: &Vec<(VarType, String, TypeInfo)>,
+        func_visits: &HashMap<String, (u32, u32)>,
+    ) -> Result<(), (EvalError, String)> {
+        for (vart, varname, Typ) in vars {
+            let varvisits = func_visits.get(varname).unwrap_or(&(0, 0));
+            match vart {
+                VarType::Affine => {
+                    if varvisits.1 > 1 {
+                        return Err((
+                            EvalError::AffineVarMoreThanOnce,
+                            format!(
+                                "Affine variable \"{varname}\" may be used {}>1 times",
+                                varvisits.1
+                            ),
+                        ));
+                    } else if varvisits.0 != varvisits.1 {
+                        return Err((
+                            EvalError::AffineVarNonDeterministic,
+                            format!("Affine variable \"{varname}\" usage is inconsistant"),
+                        ));
+                    }
+                }
+                VarType::Relevant => {
+                    if varvisits.0 == 0 {
+                        return Err((
+                            EvalError::RelevantVarUnused,
+                            format!("Relative variable \"{varname}\" may remain unused"),
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     fn define_func(
         &mut self,
         name: String,
@@ -192,7 +234,7 @@ impl TypeContext {
         if self.funcs.contains_key(&name) {
             return Err((
                 EvalError::NameDuplication,
-                format!("function with name {name} already exists"),
+                format!("function with name \"{name}\" already exists"),
             ));
         }
         self.infunction = true;
@@ -201,13 +243,17 @@ impl TypeContext {
             if self.local_vars.contains_key(varname) {
                 return Err((
                     EvalError::NameDuplication,
-                    format!("localvar with name {name} already exists"),
+                    format!("localvar with name \"{name}\" already exists"),
                 ));
             }
             self.local_vars
                 .insert(varname.clone(), (vart.clone(), Typ.clone()));
         }
+        self.var_visit.push(HashMap::new());
         let Ret = eval_expr_type(expr, self)?;
+        let func_visits = self.var_visit.pop().unwrap();
+        self.check_affine_relative(&params, &func_visits)?;
+
         self.infunction = false;
 
         self.funcs.insert(name, (params, Ret));
@@ -222,7 +268,7 @@ impl TypeContext {
         if self.records.contains_key(&name) {
             return Err((
                 EvalError::NameDuplication,
-                format!("record with name {name} already exists"),
+                format!("record with name \"{name}\" already exists"),
             ));
         }
         self.records.insert(name, fields);
@@ -338,7 +384,10 @@ fn eval_value_type(value: &Value, ctx: &mut TypeContext) -> Result<TypeInfo, (Ev
                     if T0 != Ti {
                         return Err((
                             EvalError::MismatchedType,
-                            format!("Inconsistant list typed value : {:?} != {:?}", T0, Ti),
+                            format!(
+                                "Inconsistant list typed value, ({:?}) :: {:?} != {:?} :: ({:?})",
+                                v0, T0, Ti, vi
+                            ),
                         ));
                     }
                 }
@@ -365,7 +414,10 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
             if Cond != BoolT {
                 return Err((
                     EvalError::MismatchedType,
-                    format!("Expected bool in if condition, found {:?}", Cond),
+                    format!(
+                        "Expected bool in if condition, found ({:?}) :: {:?}",
+                        cond_expr, Cond
+                    ),
                 ));
             }
             ctx.begin_branch();
@@ -378,8 +430,8 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
                 return Err((
                     EvalError::MismatchedType,
                     format!(
-                        "Expected if to have matched types on the then and else sides, found {:?} != {:?}",
-                        True, False
+                        "Expected if to have matched types on the then and else sides, found ({:?}) :: {:?} != {:?} :: ({:?})",
+                        true_expr, True, False, false_expr
                     ),
                 ));
             }
@@ -392,7 +444,10 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
             } else {
                 Err((
                     EvalError::MismatchedType,
-                    format!("Expected not operator to take bool not {:?}", T),
+                    format!(
+                        "Expected not operator to take bool not ({:?}) :: {:?}",
+                        expr, T
+                    ),
                 ))
             }
         }
@@ -402,7 +457,10 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
             if Lhs != Rhs {
                 Err((
                     EvalError::MismatchedType,
-                    format!("Lhs and Rhs type missmatched, {:?} != {:?}", Lhs, Rhs),
+                    format!(
+                        "Lhs + Rhs type missmatched, ({:?}) :: {:?} != {:?} :: ({:?})",
+                        lhs_expr, Lhs, Rhs, rhs_expr
+                    ),
                 ))
             } else {
                 Ok(Lhs)
@@ -435,8 +493,9 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
                 return Err((
                     EvalError::InvalidFuncEval,
                     format!(
-                        "argument count missmatch : {} required, {} was given",
+                        "Function argument count missmatch : {} required for \"{}\", {} was given",
                         params.len(),
+                        funcname,
                         fields.len()
                     ),
                 ));
@@ -447,8 +506,8 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
                     return Err((
                         EvalError::MismatchedType,
                         format!(
-                            "argument type missmatch : {:?} required, {:?} was given",
-                            Param, Fexpr
+                            "Function argument type missmatch : {:?} was required, ({:?}) :: {:?} was given",
+                            Param, fexpr, Fexpr
                         ),
                     ));
                 }
@@ -463,7 +522,10 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
                     if Ti != T0 {
                         return Err((
                             EvalError::MismatchedType,
-                            format!("Inconsistant list typed value : {:?} != {:?}", T0, Ti),
+                            format!(
+                                "Inconsistant list typed value, ({:?}) :: {:?} != {:?} :: ({:?})",
+                                e0, T0, Ti, ei
+                            ),
                         ));
                     }
                 }
@@ -523,6 +585,7 @@ enum EvalError {
     InvalidFuncEval,
     NameDuplication,
     AffineVarMoreThanOnce,
+    AffineVarNonDeterministic,
     RelevantVarUnused,
     NoEntryPoint,
     MultipleEntryPoints,
@@ -777,6 +840,39 @@ mod tests {
     }
 
     #[test]
+    fn test0() {
+        let prog0 = Program(vec![
+            STMT::VarDef(
+                VarType::Relevant,
+                "x".into(),
+                b!(Expr::ConstExpr(Value::IntVal(4))),
+            ),
+            STMT::VarDef(
+                VarType::Relevant,
+                "lst".into(),
+                b!(Expr::ConstExpr(Value::ListVal(vec![
+                    Value::IntVal(1),
+                    Value::IntVal(2),
+                    Value::IntVal(3)
+                ]))),
+            ),
+            STMT::Expr(b!(Expr::SumExpr(
+                b!(Expr::VarExpr("list".into())),
+                b!(Expr::ListExpr(vec![Expr::VarExpr("x".into())]))
+            ))),
+        ]);
+        // println!("{}", serde_json::to_string(&prog0).unwrap());
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample0.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => it,
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+
+        // println!("{}", serde_json::to_string_pretty(&prog1).unwrap());
+    }
+    #[test]
     fn test1() {
         let prog1 = Program(vec![
             STMT::VarDef(
@@ -888,7 +984,12 @@ mod tests {
 
         let progfromjson =
             serde_json::from_str::<Program>(include_str!("testing/sample1.json")).unwrap();
-        println!("{:?}", progfromjson);
+        // println!("{:?}", progfromjson);
+        //
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => it,
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
 
         // println!("{}", serde_json::to_string_pretty(&prog1).unwrap());
     }
