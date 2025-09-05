@@ -1,0 +1,14 @@
+[
+  { "VarDef": ["Affine", "x", { "ConstExpr": { "IntVal": 0 } }] },
+  { "VarDef": ["Relevant", "y", { "ConstExpr": { "IntVal": 0 } }] },
+  { "VarDef": ["Relevant", "cond", { "ConstExpr": { "BoolVal": true } }] },
+  {
+    "Expr": {
+      "IfElseExpr": [
+        { "VarExpr": "cond" },
+        { "ConstExpr": { "IntVal": 0 } },
+        { "ConstExpr": { "BoolVal": true } }
+      ]
+    }
+  }
+]

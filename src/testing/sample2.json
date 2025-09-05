@@ -16,5 +16,5 @@
       "SumExpr": [{ "VarExpr": "lst" }, { "ListExpr": [{ "VarExpr": "x" }] }]
     }
   },
-  { "VarDef": ["Affine", "x", { "ConstExpr": { "IntVal": 0 } }] }
+  { "VarDef": ["Relevant", "y", { "ConstExpr": { "IntVal": 0 } }] }
 ]

@@ -116,7 +116,7 @@ impl TypeContext {
     }
 
     fn resolve_var(&mut self, varname: &str) -> Result<TypeInfo, (EvalError, String)> {
-        println!("[LOG] resolve var : {varname}");
+        // println!("[LOG] resolve var : {varname}");
         let vars = if self.infunction {
             &self.local_vars
         } else {
@@ -503,7 +503,17 @@ fn eval_expr_type(expr: &Expr, ctx: &mut TypeContext) -> Result<TypeInfo, (EvalE
             }
             for (fexpr, (_, _, Param)) in fields.iter().zip(params) {
                 let Fexpr = eval_expr_type(fexpr, ctx)?;
-                if Fexpr != Param {
+                let Resolved = if let TypeInfo::RecordName(typename) = Fexpr.clone() {
+                    ctx.resolve_typename(&typename)?
+                } else {
+                    Fexpr.clone()
+                };
+                let ResolvedParam = if let TypeInfo::RecordName(typename) = Param.clone() {
+                    ctx.resolve_typename(&typename)?
+                } else {
+                    Param.clone()
+                };
+                if Resolved != ResolvedParam {
                     return Err((
                         EvalError::MismatchedType,
                         format!(
@@ -840,162 +850,98 @@ mod tests {
         println!("{:?}", lof_lof_int);
         println!("{:?}", lof_pii);
 
-        println!("{}", serde_json::to_string_pretty(&lof_lof_int).unwrap());
-        println!("{}", serde_json::to_string_pretty(&lof_pii).unwrap());
+        // println!("{}", serde_json::to_string_pretty(&lof_lof_int).unwrap());
+        // println!("{}", serde_json::to_string_pretty(&lof_pii).unwrap());
     }
 
     #[test]
     fn test0() {
-        let prog0 = Program(vec![
-            STMT::VarDef(
-                VarType::Relevant,
-                "x".into(),
-                b!(Expr::ConstExpr(Value::IntVal(4))),
-            ),
-            STMT::VarDef(
-                VarType::Relevant,
-                "lst".into(),
-                b!(Expr::ConstExpr(Value::ListVal(vec![
-                    Value::IntVal(1),
-                    Value::IntVal(2),
-                    Value::IntVal(3)
-                ]))),
-            ),
-            STMT::Expr(b!(Expr::SumExpr(
-                b!(Expr::VarExpr("list".into())),
-                b!(Expr::ListExpr(vec![Expr::VarExpr("x".into())]))
-            ))),
-        ]);
-        // println!("{}", serde_json::to_string(&prog0).unwrap());
         let progfromjson =
             serde_json::from_str::<Program>(include_str!("testing/sample0.json")).unwrap();
 
         let result = match eval_prog_type(&progfromjson) {
-            Ok(it) => it,
+            Ok(it) => return println!("[OK]"),
             Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
         };
-
-        // println!("{}", serde_json::to_string_pretty(&prog1).unwrap());
     }
     #[test]
     fn test1() {
-        let prog1 = Program(vec![
-            STMT::VarDef(
-                VarType::Relevant,
-                "x".into(),
-                b!(Expr::ConstExpr(Value::IntVal(4))),
-            ),
-            STMT::VarDef(
-                VarType::Relevant,
-                "lst".into(),
-                b!(Expr::ConstExpr(Value::ListVal(vec![
-                    Value::IntVal(1),
-                    Value::IntVal(2),
-                    Value::IntVal(3)
-                ]))),
-            ),
-            STMT::VarDef(
-                VarType::Relevant,
-                "begin".into(),
-                b!(Expr::ConstExpr(Value::StrVal("salam be \"".into()))),
-            ),
-            STMT::VarDef(
-                VarType::Relevant,
-                "end".into(),
-                b!(Expr::ConstExpr(Value::StrVal("\" aziz del".into()))),
-            ),
-            STMT::VarDef(
-                VarType::Affine,
-                "a".into(),
-                b!(Expr::SumExpr(
-                    b!(Expr::VarExpr("lst".into())),
-                    b!(Expr::ListExpr(vec![Expr::VarExpr("x".into())]))
-                )),
-            ),
-            STMT::VarDef(
-                VarType::Affine,
-                "s".into(),
-                b!(Expr::SumExpr(
-                    b!(Expr::VarExpr("begin".into())),
-                    b!(Expr::SumExpr(
-                        b!(Expr::ConstExpr(Value::StrVal("to".into()))),
-                        b!(Expr::VarExpr("end".into()))
-                    ))
-                )),
-            ),
-            STMT::FuncDef(
-                "list_append".into(),
-                vec![
-                    (VarType::Relevant, "list".into(), ListT(b!(IntT))),
-                    (VarType::Affine, "item".into(), IntT),
-                ],
-                b!(Expr::SumExpr(
-                    b!(Expr::VarExpr("list".into())),
-                    b!(Expr::ListExpr(vec![Expr::VarExpr("item".into())]))
-                )),
-            ),
-            STMT::VarDef(
-                VarType::Affine,
-                "test_list_append".into(),
-                b!(Expr::FuncEvalExpr(
-                    "list_append".into(),
-                    vec![Expr::VarExpr("a".into()), Expr::ConstExpr(Value::IntVal(5))]
-                )),
-            ),
-            STMT::RecDef("Pair".into(), vec![("x".into(), IntT), ("y".into(), IntT)]),
-            STMT::FuncDef(
-                "get_x".into(),
-                vec![(
-                    VarType::Affine,
-                    "pair".into(),
-                    TypeInfo::RecordName("Pair".into()),
-                )],
-                b!(Expr::FieldExpr(
-                    b!(Expr::VarExpr("pair".into())),
-                    "x".into()
-                )),
-            ),
-            STMT::FuncDef(
-                "get_y".into(),
-                vec![(
-                    VarType::Affine,
-                    "pair".into(),
-                    TypeInfo::RecordName("Pair".into()),
-                )],
-                b!(Expr::FieldExpr(
-                    b!(Expr::VarExpr("pair".into())),
-                    "y".into()
-                )),
-            ),
-            STMT::FuncDef(
-                "get_sum".into(),
-                vec![(
-                    VarType::Relevant,
-                    "pair".into(),
-                    TypeInfo::RecordName("Pair".into()),
-                )],
-                b!(Expr::SumExpr(
-                    b!(Expr::FuncEvalExpr(
-                        "get_x".into(),
-                        vec![Expr::VarExpr("pair".into())]
-                    )),
-                    b!(Expr::FuncEvalExpr(
-                        "get_y".into(),
-                        vec![Expr::VarExpr("pair".into())]
-                    )),
-                )),
-            ),
-        ]);
-
         let progfromjson =
             serde_json::from_str::<Program>(include_str!("testing/sample1.json")).unwrap();
-        // println!("{:?}", progfromjson);
-        //
+
         let result = match eval_prog_type(&progfromjson) {
-            Ok(it) => it,
+            Ok(it) => return println!("[OK]"),
             Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
         };
+    }
+    #[test]
+    fn test2() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample2.json")).unwrap();
 
-        // println!("{}", serde_json::to_string_pretty(&prog1).unwrap());
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+    }
+    #[test]
+    fn test3() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample3.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+    }
+    #[test]
+    fn test4() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample4.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+    }
+    #[test]
+    fn test5() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample5.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+    }
+    #[test]
+    fn test6() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample6.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+    }
+    #[test]
+    fn test7() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample7.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
+    }
+    #[test]
+    fn test8() {
+        let progfromjson =
+            serde_json::from_str::<Program>(include_str!("testing/sample8.json")).unwrap();
+
+        let result = match eval_prog_type(&progfromjson) {
+            Ok(it) => return println!("[OK]"),
+            Err(err) => return println!("[ERROR] {:?} : {}", err.0, err.1),
+        };
     }
 }

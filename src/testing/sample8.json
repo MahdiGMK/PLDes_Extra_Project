@@ -1,0 +1,134 @@
+[
+  { "VarDef": ["Relevant", "x", { "ConstExpr": { "IntVal": 4 } }] },
+  {
+    "VarDef": [
+      "Relevant",
+      "lst",
+      {
+        "ConstExpr": {
+          "ListVal": [{ "IntVal": 1 }, { "IntVal": 2 }, { "IntVal": 3 }]
+        }
+      }
+    ]
+  },
+  {
+    "VarDef": [
+      "Relevant",
+      "begin",
+      { "ConstExpr": { "StrVal": "salam be \"" } }
+    ]
+  },
+  {
+    "VarDef": ["Relevant", "end", { "ConstExpr": { "StrVal": "\" aziz del" } }]
+  },
+  {
+    "VarDef": [
+      "Affine",
+      "a",
+      {
+        "SumExpr": [{ "VarExpr": "lst" }, { "ListExpr": [{ "VarExpr": "x" }] }]
+      }
+    ]
+  },
+  {
+    "VarDef": [
+      "Affine",
+      "s",
+      {
+        "SumExpr": [
+          { "VarExpr": "begin" },
+          {
+            "SumExpr": [
+              { "ConstExpr": { "StrVal": "to" } },
+              { "VarExpr": "end" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "FuncDef": [
+      "list_append",
+      [
+        ["Relevant", "list", { "List": "Int" }],
+        ["Affine", "item", "Int"]
+      ],
+      {
+        "SumExpr": [
+          { "VarExpr": "list" },
+          { "ListExpr": [{ "VarExpr": "item" }] }
+        ]
+      }
+    ]
+  },
+  {
+    "VarDef": [
+      "Affine",
+      "test_list_append",
+      {
+        "FuncEvalExpr": [
+          "list_append",
+          [{ "VarExpr": "a" }, { "ConstExpr": { "IntVal": 5 } }]
+        ]
+      }
+    ]
+  },
+  {
+    "RecDef": [
+      "Pair",
+      [
+        ["x", "Int"],
+        ["y", "Int"]
+      ]
+    ]
+  },
+  {
+    "FuncDef": [
+      "get_x",
+      [["Affine", "pair", { "RecordName": "Pair" }]],
+      { "FieldExpr": [{ "VarExpr": "pair" }, "x"] }
+    ]
+  },
+  {
+    "FuncDef": [
+      "get_y",
+      [["Affine", "pair", { "RecordName": "Pair" }]],
+      { "FieldExpr": [{ "VarExpr": "pair" }, "y"] }
+    ]
+  },
+  {
+    "FuncDef": [
+      "get_sum",
+      [["Relevant", "pair", { "RecordName": "Pair" }]],
+      {
+        "SumExpr": [
+          { "FuncEvalExpr": ["get_x", [{ "VarExpr": "pair" }]] },
+          { "FuncEvalExpr": ["get_y", [{ "VarExpr": "pair" }]] }
+        ]
+      }
+    ]
+  },
+  {
+    "Expr": {
+      "SumExpr": [
+        { "ConstExpr": { "IntVal": 1 } },
+        {
+          "FuncEvalExpr": [
+            "get_sum",
+            [
+              {
+                "ConstExpr": {
+                  "RecVal": [
+                    ["x", { "IntVal": 2 }],
+                    ["y", { "IntVal": 3 }]
+                  ]
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  }
+]

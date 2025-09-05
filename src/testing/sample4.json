@@ -1,5 +1,6 @@
 [
   { "VarDef": ["Affine", "x", { "ConstExpr": { "IntVal": 0 } }] },
+  { "VarDef": ["Relevant", "y", { "ConstExpr": { "IntVal": 0 } }] },
   {
     "VarDef": [
       "Affine",
@@ -13,8 +14,11 @@
   },
   {
     "Expr": {
-      "SumExpr": [{ "VarExpr": "lst" }, { "ListExpr": [{ "VarExpr": "x" }] }]
+      "IfElseExpr": [
+        { "VarExpr": "lst" },
+        { "VarExpr": "x" },
+        { "VarExpr": "y" }
+      ]
     }
-  },
-  { "VarDef": ["Affine", "x", { "ConstExpr": { "IntVal": 0 } }] }
+  }
 ]
